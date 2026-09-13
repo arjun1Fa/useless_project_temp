@@ -43,7 +43,7 @@ export async function buildApp() {
 
   // ─── Plugins ─────────────────────────────────────────────────────────────
   await app.register(cors, {
-    origin: env.CORS_ORIGINS,
+    origin: env.IS_DEVELOPMENT ? true : env.CORS_ORIGINS,
     credentials: true,
   });
 

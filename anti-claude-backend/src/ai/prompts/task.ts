@@ -1,3 +1,4 @@
+// Anti-Claude — Task generation prompt builder
 import { TaskCategory, TaskPriority, ResponseType } from '@prisma/client';
 
 export interface TaskGenerationInput {
