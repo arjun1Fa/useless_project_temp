@@ -6,13 +6,12 @@
 
 
 ## Basic Details
-### Team Name: [Name]
+### Team Name: [Leo Gas]
 
 
 ### Team Members
-- Team Lead: [Name] - [College]
-- Member 2: [Name] - [College]
-- Member 3: [Name] - [College]
+- Team Lead: [Sreenandan S] - [SCT]
+- Member 2: [Arjun A S] - [SCT]
 
 ### Project Description
 
