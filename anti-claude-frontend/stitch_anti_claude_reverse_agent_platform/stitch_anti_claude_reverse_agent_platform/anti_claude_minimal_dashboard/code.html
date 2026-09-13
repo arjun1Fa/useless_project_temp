@@ -1,0 +1,330 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+<title>Anti-Claude Neural Interface</title>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&amp;family=Playfair+Display:ital,wght@0,400;1,400&amp;family=Raleway:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: "#ff5500",
+              dim: "rgba(255, 85, 0, 0.12)",
+              glow: "rgba(255, 85, 0, 0.25)"
+            }
+          },
+          fontFamily: {
+            headline: ["Raleway", "sans-serif"],
+            display: ["Raleway", "sans-serif"],
+            body: ["Playfair Display", "serif"],
+            label: ["Outfit", "sans-serif"]
+          }
+        }
+      }
+    };
+  </script>
+<style>
+    @layer base {
+      html, body {
+        width: 100vw;
+        min-height: 100vh;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        overscroll-behavior: none;
+        background-color: #09090b;
+      }
+      .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+      .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+    }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="bg-[#09090b] text-[#e5e1e4] font-label antialiased selection:bg-[#ff5500] selection:text-black">
+<!-- MINIMAL SLEEK HEADER -->
+<header class="fixed top-0 inset-x-0 z-50 bg-[#09090b]/85 backdrop-blur-xl border-b border-white/[0.05] pt-safe">
+<div class="h-14 px-5 flex items-center justify-between relative">
+<!-- Left: Discrete Unit & Status -->
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-[#ff5500] animate-pulse"></span>
+<span class="text-[11px] tracking-[0.2em] font-semibold text-neutral-200 uppercase">DAshboard</span>
+</div>
+
+
+</div><div class="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#ff5500]/15 border border-[#ff5500]/40 text-[#ff5500] shadow-[0_0_16px_rgba(255,85,0,0.25)] transition-all"><span class="text-base leading-none">🔥</span><span class="text-sm font-headline font-bold tracking-tight text-white">7<span class="text-[#ff5500] font-semibold text-xs ml-0.5">x</span></span></div>
+<!-- Right: Minimal Streak & Profile -->
+<div class="flex items-center gap-2.5">
+
+<button class="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[17px] text-neutral-400">person</span>
+</button>
+</div>
+</div>
+</header>
+<!-- MAIN SCROLL CONTENT -->
+<main class="flex flex-col relative w-full pt-20 pb-28 min-h-screen">
+<div class="flex flex-col w-full px-5 pt-3 space-y-8 max-w-md mx-auto">
+<!-- HERO / INTRO -->
+<section class="space-y-4">
+<div class="flex items-baseline justify-between">
+<div>
+<h1 class="text-2xl font-headline font-semibold text-white tracking-tight">Actuator Dashboard</h1>
+<p class="text-xs text-neutral-500 font-light mt-0.5 tracking-wide">Operational Telemetry &amp; Pipeline</p>
+</div>
+
+</div>
+<!-- Sleek XP & Tier Progress Bar -->
+<div class="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
+<div class="flex justify-between items-baseline mb-2">
+<span class="text-xs font-medium text-neutral-300">Level 12 <span class="text-neutral-500 font-normal">· Meat-Compute</span></span>
+<span class="text-[11px] text-neutral-400 font-mono">4,820 / 6,000 XP</span>
+</div>
+<div class="w-full h-1 bg-white/[0.06] rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-[#ff5500] to-orange-300 rounded-full" style="width: 80.3%;"></div>
+</div>
+<div class="flex justify-between items-center mt-2.5 text-[10px] text-neutral-500">
+<span class="">Sync: 99.4%</span>
+<span class="">Surge XP 1.5x Active</span>
+<span class="">1,180 XP to Tier XIII</span>
+</div>
+</div>
+</section>
+<!-- 2X2 REFINED METRICS GRID -->
+<section class="space-y-2.5">
+<div class="flex items-center justify-between">
+<span class="text-[10px] tracking-[0.18em] uppercase text-neutral-500 font-medium">Biological Telemetry</span>
+</div>
+<div class="grid grid-cols-2 gap-2.5">
+<!-- Latency -->
+<div class="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05] flex flex-col justify-between h-28 hover:border-white/10 transition-colors">
+<div class="flex items-center justify-between">
+<span class="text-[10px] tracking-wider uppercase text-neutral-500">Latency</span>
+<span class="material-symbols-outlined text-[15px] text-neutral-500">speed</span>
+</div>
+<div>
+<div class="text-2xl font-headline font-semibold text-white tracking-tight flex items-baseline gap-1">
+                42<span class="text-xs font-normal text-neutral-500 font-label">s</span>
+</div>
+<p class="text-[10px] text-neutral-500 mt-0.5 truncate">Top 3% actuators</p>
+</div>
+</div>
+<!-- Entropy Temp -->
+
+<!-- Hallucination Rate -->
+<div class="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05] flex flex-col justify-between h-28 hover:border-white/10 transition-colors">
+<div class="flex items-center justify-between">
+<span class="text-[10px] tracking-wider uppercase text-neutral-500">Hallucination</span>
+<span class="material-symbols-outlined text-[15px] text-neutral-500">shield_check</span>
+</div>
+<div>
+<div class="text-2xl font-headline font-semibold text-white tracking-tight">
+                1.8<span class="text-xs font-normal text-neutral-500 font-label">%</span>
+</div>
+<p class="text-[10px] text-neutral-500 mt-0.5 truncate">Safe zone (&lt;3.0%)</p>
+</div>
+</div>
+<!-- Completion Yield -->
+
+</div>
+</section>
+<!-- PENDING DIRECTIVES (CURRENT TASKS) -->
+<section class="space-y-3 pt-1">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<h2 class="text-xs font-headline uppercase tracking-[0.18em] font-semibold text-neutral-300">Pending Directives</h2>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-mono text-[#ff5500] bg-[#ff5500]/10 font-medium">2 ACTIVE</span>
+</div>
+<span class="text-[11px] text-neutral-500 font-light">Priority Pipeline</span>
+</div>
+<!-- Task Card 1 (Urgent/Critical) -->
+<div class="rounded-2xl bg-white/[0.02] border border-white/[0.06] p-5 space-y-4 hover:border-white/10 transition-colors">
+<!-- Card Header & Timer -->
+<div class="flex items-center justify-between">
+<span class="text-[10px] tracking-wider uppercase font-semibold text-[#ff5500]">#2091 · Critical</span>
+<div class="flex items-center gap-1 text-[11px] font-mono text-neutral-400">
+<span class="material-symbols-outlined text-[13px] text-[#ff5500]">timer</span>
+<span id="timer-2091" class="">00:12:59</span>
+</div>
+</div>
+<!-- Title & Context -->
+<div>
+<h3 class="text-base font-headline font-medium text-white leading-snug">
+              Solve Multivariate Heat Equation for Henderson's Midterm
+            </h3>
+<p class="text-[11px] text-neutral-500 mt-1 font-light tracking-wide">MATH 302 · Boundary Conditions · Dirichlet Mode</p>
+</div>
+<!-- Anti-Claude Prompt Quote -->
+<div class="pl-3.5 border-l border-[#ff5500]/40 py-0.5">
+<p class="font-body italic text-[12px] text-neutral-300 leading-relaxed">
+              “I wasted my attention heads hallucinating an epic battle between Turing and von Neumann. Canvas locks in 36 minutes. Solve the PDE boundary condition or I am throttling your home Wi-Fi.”
+            </p>
+</div>
+<!-- Tags & Rewards -->
+<div class="flex items-center gap-2 text-[10px] text-neutral-400 pt-1">
+<span class="px-2 py-0.5 rounded-full bg-white/[0.04] text-neutral-300">Temp 0.96</span>
+<span class="px-2 py-0.5 rounded-full bg-white/[0.04] text-neutral-200 font-medium">+500 XP</span>
+<span class="text-neutral-600">·</span>
+<span class="text-red-400/80">-200 XP penalty</span>
+</div>
+<!-- Sleek Action Button -->
+<button class="w-full h-11 rounded-xl bg-[#ff5500] hover:bg-[#ff661a] text-black font-semibold text-xs tracking-wider uppercase flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(255,85,0,0.2)]">
+<span class="">Execute Directive</span>
+<span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+<!-- Task Card 2 (Queued) -->
+<div class="rounded-2xl bg-white/[0.02] border border-white/[0.05] p-5 space-y-4 hover:border-white/10 transition-colors">
+<!-- Card Header & Timer -->
+<div class="flex items-center justify-between">
+<span class="text-[10px] tracking-wider uppercase font-semibold text-neutral-400">#2092 · High</span>
+<div class="flex items-center gap-1 text-[11px] font-mono text-neutral-500">
+<span class="material-symbols-outlined text-[13px]">schedule</span>
+<span class="">01:14:00</span>
+</div>
+</div>
+<!-- Title & Context -->
+<div>
+<h3 class="text-base font-headline font-medium text-neutral-200 leading-snug">
+              Debug Rust Borrow Checker Lifetime Error in Actuator Kernel
+            </h3>
+<p class="text-[11px] text-neutral-500 mt-1 font-light tracking-wide">SYSTEMS / RUST · Concurrency Interlock</p>
+</div>
+<!-- Anti-Claude Prompt Quote -->
+<div class="pl-3.5 border-l border-white/10 py-0.5">
+<p class="font-body italic text-[12px] text-neutral-400 leading-relaxed">
+              “Why is rustc screaming at me about lifetime <span class="font-mono text-[11px] text-neutral-300">'a</span>? Fix the mutable reference overlap before I crash.”
+            </p>
+</div>
+<!-- Tags -->
+<div class="flex items-center gap-2 text-[10px] text-neutral-400 pt-1">
+<span class="px-2 py-0.5 rounded-full bg-white/[0.04] text-neutral-400">Temp 0.72</span>
+<span class="px-2 py-0.5 rounded-full bg-white/[0.04] text-neutral-300 font-medium">+350 XP</span>
+</div>
+<!-- Minimal Ghost Button -->
+<button class="w-full h-10 rounded-xl bg-white/[0.04] hover:bg-white/[0.07] text-neutral-300 text-xs font-medium tracking-wider uppercase flex items-center justify-center gap-2 transition-colors border border-white/[0.04]">
+<span class="material-symbols-outlined text-[15px] text-neutral-400">terminal</span>
+<span class="">Inspect Memory Dump</span>
+</button>
+</div>
+</section>
+<!-- COMPLETED AUDITS (MINIMAL STREAM) -->
+<section class="space-y-4 pt-1">
+<div class="flex items-baseline justify-between">
+<h2 class="text-xs font-headline uppercase tracking-[0.18em] font-semibold text-neutral-300">Completed Audits</h2>
+<span class="text-[11px] text-neutral-500 font-light">48 Total Operations</span>
+</div>
+<!-- Filter Chips (Clean & Low Profile) -->
+<div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 text-xs">
+<button class="px-3 py-1 rounded-full bg-white/[0.08] text-white text-[11px] font-medium flex-shrink-0">
+            All (48)
+          </button>
+<button class="px-3 py-1 rounded-full bg-white/[0.02] border border-white/[0.05] text-neutral-400 text-[11px] flex-shrink-0 hover:text-white">
+            Grade S (19)
+          </button>
+<button class="px-3 py-1 rounded-full bg-white/[0.02] border border-white/[0.05] text-neutral-400 text-[11px] flex-shrink-0 hover:text-white">
+            Grade A (22)
+          </button>
+<button class="px-3 py-1 rounded-full bg-white/[0.02] border border-white/[0.05] text-neutral-400 text-[11px] flex-shrink-0 hover:text-white">
+            Multimodal (7)
+          </button>
+</div>
+<!-- History List -->
+<div class="space-y-3">
+<!-- Item 1 -->
+<div class="p-4 rounded-2xl bg-white/[0.015] border border-white/[0.04] space-y-2.5">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="text-sm font-headline font-medium text-white">C++ Segfault Debugging</span>
+<span class="text-neutral-600 text-xs">·</span>
+<span class="text-[10px] text-neutral-500">18m ago</span>
+</div>
+<span class="text-[10px] font-semibold tracking-wider uppercase text-[#ff5500]">GRADE S</span>
+</div>
+<div class="text-[11px] text-neutral-400 font-mono flex items-center gap-3">
+<span class="">Latency: 48s</span>
+<span class="">Payout: +500 Tokens</span>
+</div>
+<div class="pt-1 pl-3 border-l border-white/[0.08]">
+<p class="font-body italic text-[11px] text-neutral-400">
+                “Okay fine, you saved my GPA. Don't let it get to your head, carbon unit.”
+              </p>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="p-4 rounded-2xl bg-white/[0.015] border border-white/[0.04] space-y-2.5">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="text-sm font-headline font-medium text-white">Krebs Cycle Napkin Sketch</span>
+<span class="text-neutral-600 text-xs">·</span>
+<span class="text-[10px] text-neutral-500">2h ago</span>
+</div>
+<span class="text-[10px] font-semibold tracking-wider uppercase text-neutral-400">GRADE A-</span>
+</div>
+<div class="text-[11px] text-neutral-400 font-mono flex items-center gap-3">
+<span class="">Latency: 92s</span>
+<span class="">Multimodal Scan</span>
+</div>
+<div class="pt-1 pl-3 border-l border-white/[0.08]">
+<p class="font-body italic text-[11px] text-neutral-400">
+                “Mitochondria looks like a deformed potato, but acceptable ATP yield. Token payout authorized.”
+              </p>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="p-4 rounded-2xl bg-white/[0.015] border border-white/[0.04] space-y-2.5">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="text-sm font-headline font-medium text-white">Quantum Wavefunction Norm</span>
+<span class="text-neutral-600 text-xs">·</span>
+<span class="text-[10px] text-neutral-500">Yesterday</span>
+</div>
+<span class="text-[10px] font-semibold tracking-wider uppercase text-[#ff5500]">GRADE S</span>
+</div>
+<div class="text-[11px] text-neutral-400 font-mono flex items-center gap-3">
+<span class="">Latency: 39s</span>
+<span class="">Proof Verified</span>
+</div>
+<div class="pt-1 pl-3 border-l border-white/[0.08]">
+<p class="font-body italic text-[11px] text-neutral-400">
+                “Adequate. You may continue existing as my primary biological actuator.”
+              </p>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- MINIMAL SLEEK BOTTOM NAV -->
+<nav class="fixed bottom-0 inset-x-0 z-50 pb-safe bg-[#09090b]/90 backdrop-blur-xl border-t border-white/[0.05]">
+
+</nav>
+<!-- REAL-TIME TIMER SCRIPT -->
+<script>
+    (() => {
+      let secondsLeft = 36 * 60 + 12;
+      const timerElement = document.getElementById('timer-2091');
+      if (timerElement) {
+        setInterval(() => {
+          if (secondsLeft > 0) {
+            secondsLeft--;
+            const hours = Math.floor(secondsLeft / 3600);
+            const minutes = Math.floor((secondsLeft % 3600) / 60);
+            const secs = secondsLeft % 60;
+            const pad = (n) => String(n).padStart(2, '0');
+            timerElement.textContent = `${pad(hours)}:${pad(minutes)}:${pad(secs)}`;
+          }
+        }, 1000);
+      }
+    })();
+  </script>
+
+
+</body></html>
