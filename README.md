@@ -94,15 +94,15 @@ For Software:
 
 # Screenshots (Add at least 3)
 
-![Screenshot1]\(Add screenshot 1 here with proper name)
+![![alt text](image-2.png)]\(Add screenshot 1 here with proper name)
 
 Anti-Claude Interface — Shows the AI-side interface where Anti-Claude sends tasks, reacts to the employee, and monitors their performance.
 
-![Screenshot2]\(Add screenshot 2 here with proper name)
+![![alt text](image-1.png)]\(Add screenshot 2 here with proper name)
 
 Human Interface — Shows the employee receiving a request from Anti-Claude and responding using text, images, or files.
 
-![Screenshot3]\(Add screenshot 3 here with proper name)
+![![alt text](image.png)]\(Add screenshot 3 here with proper name)
 
 Employee Dashboard — Shows the employee's rank, score, completed and ignored tasks, absurdity level, response performance, relationship status, and other completely unnecessary corporate statistics.
 
