@@ -163,13 +163,13 @@ export const evaluationService = {
       );
 
       // Persist AI reaction message
-      await prisma.message.create({
+      const aiReactionRecord = await prisma.message.create({
         data: {
           userId,
           taskId,
           senderType: 'AI',
           content: reactionMessage,
-          metadata: { type: 'EVALUATION_REACTION', verdict: evaluation.verdict },
+          metadata: { type: 'EVALUATION_REACTION', verdict: evaluation.verdict, score: evaluation.score, scoreDelta },
         },
       });
 
@@ -204,9 +204,12 @@ export const evaluationService = {
       });
 
       realtimeGateway.broadcast(userId, 'AI_MESSAGE_CREATED', {
+        id: aiReactionRecord.id,
         taskId,
         content: reactionMessage,
         senderType: 'AI',
+        metadata: { type: 'EVALUATION_REACTION', verdict: evaluation.verdict, score: evaluation.score, scoreDelta },
+        createdAt: aiReactionRecord.createdAt,
       });
 
       realtimeGateway.broadcast(userId, 'EMPLOYEE_SCORE_UPDATED', {

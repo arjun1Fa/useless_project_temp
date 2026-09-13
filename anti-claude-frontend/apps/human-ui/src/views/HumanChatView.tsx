@@ -150,33 +150,44 @@ export const HumanChatView: React.FC<HumanChatViewProps> = ({
           metadata: d.metadata,
         };
         setMessages((prev) => {
-          // Prevent duplicates
-          if (prev.some((m) => m.id === newMsg.id)) return prev;
+          // Prevent duplicates by ID or identical content & senderType
+          if (prev.some((m) => m.id === newMsg.id || (m.content === newMsg.content && m.senderType === 'AI'))) return prev;
           return [...prev, newMsg];
         });
-        if (soundEnabled) humanSfx.playIncomingPing();
+        if (soundEnabled) {
+          if (newMsg.metadata?.type === 'EVALUATION_REACTION') {
+            humanSfx.playPromotionAirhorn();
+          } else {
+            humanSfx.playIncomingPing();
+          }
+        }
+      }
+    };
+
+    const onHumanMessage = (event: any) => {
+      const d = event?.data;
+      if (d) {
+        const newMsg: ChatMessage = {
+          id: d.id || `human-${Date.now()}`,
+          senderType: 'HUMAN',
+          content: d.content,
+          taskId: d.taskId,
+          createdAt: d.createdAt || new Date().toISOString(),
+          metadata: d.metadata,
+        };
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === newMsg.id || (m.content === newMsg.content && m.senderType === 'HUMAN'))) {
+            return prev;
+          }
+          return [...prev, newMsg];
+        });
       }
     };
 
     const onTaskCreated = (event: any) => {
       const t = event?.data;
       if (t) {
-        const taskMsg: ChatMessage = {
-          id: `task-directive-${t.id || Date.now()}`,
-          senderType: 'AI',
-          content: t.aiMessage || t.description || 'New task assigned by Anti-Claude.',
-          taskId: t.id,
-          createdAt: t.createdAt || new Date().toISOString(),
-          isTaskDirective: true,
-          taskData: {
-            id: t.id,
-            title: t.title || 'MANDATORY EMPLOYEE DIRECTIVE',
-            priority: t.priority || 'HIGH',
-            absurdityLevel: t.absurdityLevel || 1,
-            isEmergency: !!t.isEmergency,
-          },
-        };
-        setMessages((prev) => [...prev, taskMsg]);
+        // Task state & crisis banner updated; prompt message bubble is delivered cleanly via AI_MESSAGE_CREATED
         loadTasks();
         if (soundEnabled) {
           if (t.isEmergency) humanSfx.playKlaxon();
@@ -205,16 +216,26 @@ export const HumanChatView: React.FC<HumanChatViewProps> = ({
       }
     };
 
+    const onMessagesCleared = () => {
+      setMessages([]);
+    };
+
+    socket.on('AI_MESSAGE_CREATED', onAiMessage);
     socket.on('AI_MESSAGE_SENT', onAiMessage);
+    socket.on('HUMAN_MESSAGE_CREATED', onHumanMessage);
     socket.on('TASK_CREATED', onTaskCreated);
     socket.on('TASK_COMPLETED', onTaskCompleted);
     socket.on('EMPLOYEE_PROMOTED', onPromoted);
+    socket.on('MESSAGES_CLEARED', onMessagesCleared);
 
     return () => {
+      socket.off('AI_MESSAGE_CREATED', onAiMessage);
       socket.off('AI_MESSAGE_SENT', onAiMessage);
+      socket.off('HUMAN_MESSAGE_CREATED', onHumanMessage);
       socket.off('TASK_CREATED', onTaskCreated);
       socket.off('TASK_COMPLETED', onTaskCompleted);
       socket.off('EMPLOYEE_PROMOTED', onPromoted);
+      socket.off('MESSAGES_CLEARED', onMessagesCleared);
     };
   }, [soundEnabled]);
 
@@ -363,7 +384,7 @@ export const HumanChatView: React.FC<HumanChatViewProps> = ({
           {/* Welcome Banner */}
           <div className="text-center py-2">
             <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 bg-neutral-900/80 px-3 py-1 rounded-full border border-neutral-800">
-              Session Connected to Anti-Claude Boss • Live Channel
+              Connected to Anti-Claude (Student) • Human-AI Inference Active
             </span>
           </div>
 
@@ -372,10 +393,10 @@ export const HumanChatView: React.FC<HumanChatViewProps> = ({
             <div className="p-3 rounded-2xl bg-[#141418] border border-[#ff5500]/30 shadow-md">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-mono font-bold text-[#ff5500] uppercase flex items-center gap-1">
-                  <Flame className="w-3 h-3" /> PENDING ASSIGNMENT
+                  <Flame className="w-3 h-3" /> URGENT STUDENT PROMPT
                 </span>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800">
-                  Tier {activeCrisis.absurdityLevel}/5
+                  Chaos {activeCrisis.absurdityLevel}/5
                 </span>
               </div>
               <h4 className="text-xs font-bold text-white tracking-tight">{activeCrisis.title}</h4>
@@ -399,7 +420,7 @@ export const HumanChatView: React.FC<HumanChatViewProps> = ({
                     <Award className="w-4 h-4" />
                   </div>
                   <span className="text-[10px] font-mono font-bold tracking-widest text-amber-400 uppercase">
-                    OFFICIAL PROMOTION DECREE
+                    CAMPUS WINGMAN LEVEL-UP DECREE
                   </span>
                   <p className="text-xs text-neutral-200 mt-2 font-mono leading-relaxed">
                     {msg.content}
@@ -418,7 +439,7 @@ export const HumanChatView: React.FC<HumanChatViewProps> = ({
               >
                 {/* Sender label */}
                 <span className="text-[10px] font-mono text-neutral-500 mb-1 px-1">
-                  {isAI ? 'Anti-Claude (AI Boss)' : 'You (Human Employee)'} • {formatTime(msg.createdAt)}
+                  {isAI ? 'Anti-Claude (Student)' : 'You (Human AI / Chatbot)'} • {formatTime(msg.createdAt)}
                 </span>
 
                 {/* Bubble Container */}
@@ -433,11 +454,21 @@ export const HumanChatView: React.FC<HumanChatViewProps> = ({
                 >
                   {/* Reaction Verdict Badge */}
                   {isAI && isReaction && (
-                    <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b border-cyan-900/50">
-                      <Sparkles className="w-3 h-3 text-cyan-400" />
-                      <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider">
-                        EVALUATION VERDICT: {msg.metadata?.verdict || 'LOGGED'}
-                      </span>
+                    <div className="flex items-center justify-between gap-1.5 mb-2 pb-1.5 border-b border-cyan-900/50 text-[10px] font-bold uppercase tracking-wider">
+                      <div className="flex items-center gap-1.5 text-cyan-300">
+                        <Sparkles className="w-3 h-3 text-cyan-400" />
+                        <span>STUDENT RATING: {msg.metadata?.verdict || 'REVIEWED'}</span>
+                      </div>
+                      {msg.metadata?.score !== undefined && (
+                        <div className="flex items-center gap-1 text-[9px]">
+                          <span className="text-slate-400">{msg.metadata.score}/100</span>
+                          {msg.metadata?.scoreDelta !== undefined && (
+                            <span className={msg.metadata.scoreDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                              ({msg.metadata.scoreDelta >= 0 ? `+${msg.metadata.scoreDelta}` : msg.metadata.scoreDelta} pts)
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -465,11 +496,11 @@ export const HumanChatView: React.FC<HumanChatViewProps> = ({
             );
           })}
 
-          {/* Evaluating indicator */}
+          {/* Evaluating / typing indicator */}
           {isSubmitting && (
             <div className="flex items-center gap-2 text-xs font-mono text-[#ff5500] bg-[#1a1714] p-3 rounded-2xl border border-[#ff5500]/30 animate-pulse">
               <span className="w-2 h-2 rounded-full bg-[#ff5500] animate-ping"></span>
-              <span>Anti-Claude is reviewing your submission with bureaucratic scrutiny...</span>
+              <span>Anti-Claude is typing a reply...</span>
             </div>
           )}
 
@@ -585,22 +616,21 @@ export const HumanChatView: React.FC<HumanChatViewProps> = ({
             <ImageIcon className="w-4 h-4" />
           </button>
 
-          {/* Text Input */}
+          {/* Text Input - NEVER disabled so live continuous conversation flows */}
           <input
             type="text"
             value={inputText}
             onChange={handleTextChange}
-            disabled={isSubmitting}
-            placeholder="Type your response to Anti-Claude..."
+            placeholder="Generate your AI advice to the student..."
             className="flex-1 bg-neutral-900/80 border border-neutral-800 focus:border-[#ff5500] rounded-full px-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none font-mono"
           />
 
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isSubmitting || (!inputText.trim() && !attachment)}
+            disabled={!inputText.trim() && !attachment}
             className="w-10 h-10 rounded-full bg-[#ff5500] hover:bg-[#ff6611] disabled:opacity-40 text-black flex items-center justify-center shadow-[0_0_15px_rgba(255,85,0,0.5)] active:scale-95 transition shrink-0"
-            title="Send response to Anti-Claude"
+            title="Send AI advice to student"
           >
             <Send className="w-4 h-4 fill-current" />
           </button>

@@ -147,6 +147,12 @@ export const App: React.FC = () => {
     };
     socket.on('TASK_CREATED', onBackendTask);
 
+    const onBackendAiMessage = () => {
+      setIsSubmitting(false);
+    };
+    socket.on('AI_MESSAGE_CREATED', onBackendAiMessage);
+    socket.on('AI_MESSAGE_SENT', onBackendAiMessage);
+
     const onBackendEvaluation = (event: any) => {
       const d = event?.data;
       if (d) {
@@ -156,6 +162,11 @@ export const App: React.FC = () => {
           ...prev,
           score: prev.score + (d.score || 10),
           tasksCompleted: prev.tasksCompleted + 1,
+        }));
+        setActiveCrisis((prev) => ({
+          ...prev,
+          status: 'EVALUATED',
+          isEmergency: false,
         }));
       }
     };
@@ -181,9 +192,21 @@ export const App: React.FC = () => {
       socket.off('sync_message', onSocketSync);
       socket.off('TASK_CREATED', onBackendTask);
       socket.off('TASK_COMPLETED', onBackendEvaluation);
+      socket.off('AI_MESSAGE_CREATED', onBackendAiMessage);
+      socket.off('AI_MESSAGE_SENT', onBackendAiMessage);
       socket.off('EMPLOYEE_PROMOTED', onBackendPromotion);
     };
   }, [activeCrisis.id]);
+
+  // Safety watchdog: ensure isSubmitting never locks permanently
+  useEffect(() => {
+    if (isSubmitting) {
+      const timer = setTimeout(() => {
+        setIsSubmitting(false);
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [isSubmitting]);
 
   const handleDraftChange = (draftText: string, hasAttachment: boolean) => {
     broadcastSync('WINGMAN_KEYSTROKE', { draftText, hasAttachment });
@@ -191,13 +214,16 @@ export const App: React.FC = () => {
 
   const handleSubmitResponse = async (text: string, attachment?: string) => {
     setIsSubmitting(true);
-    // 1. Broadcast to student UI
+    // 1. Broadcast to Boss Cockpit
     broadcastSync('WINGMAN_SUBMISSION', { text, attachment });
-    // 2. Submit to backend API
+    // 2. Submit to backend API (only pass active taskId if not already evaluated/closed)
     try {
-      await api.respond(activeCrisis.id, text);
-    } catch {
-      // Backend respond fallback
+      const isTaskActive = activeCrisis && activeCrisis.status !== 'EVALUATED' && activeCrisis.status !== 'CLOSED';
+      const targetTaskId = isTaskActive ? activeCrisis.id : undefined;
+      await api.sendMessage(text, targetTaskId);
+    } catch (err) {
+      console.error('Submit response failed:', err);
+      setIsSubmitting(false);
     }
   };
 

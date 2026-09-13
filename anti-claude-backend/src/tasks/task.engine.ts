@@ -73,6 +73,7 @@ export async function createTaskForEmployee(
   const generated = await generateTask(aiContext, {
     isEmergency: opts.isEmergency,
     overrideAbsurdityLevel: absurdityLevel,
+    scenarioTheme: opts.scenarioTheme,
   });
 
   // ─── Step 10: Validate (already done by Zod in task.generator.ts) ─────────

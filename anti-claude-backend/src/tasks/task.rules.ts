@@ -6,6 +6,7 @@ export interface TaskCreationOptions {
   isEmergency?: boolean;
   overrideAbsurdityLevel?: number;
   manualTrigger?: boolean;
+  scenarioTheme?: string;
 }
 
 /**
@@ -22,8 +23,8 @@ export function checkTaskCreationAllowed(
     throw new AppError('EMPLOYEE_DND', 'Employee has Do Not Disturb enabled', 429);
   }
 
-  // Emergency cooldown
-  if (opts.isEmergency && profile.lastEmergencyAt) {
+  // Emergency cooldown — skip for manual admin triggers
+  if (opts.isEmergency && !opts.manualTrigger && profile.lastEmergencyAt) {
     const timeSinceLastEmergency = Date.now() - profile.lastEmergencyAt.getTime();
     if (timeSinceLastEmergency < TASK_CONFIG.EMERGENCY_COOLDOWN_MS) {
       const waitMinutes = Math.ceil(

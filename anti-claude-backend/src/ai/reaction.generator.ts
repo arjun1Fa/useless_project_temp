@@ -95,17 +95,16 @@ export async function extractMemories(
   }
 }
 
-// ─── Promotion Message Generator ──────────────────────────────────────────────
 export async function generatePromotionMessage(
   context: AIContext,
   previousRank: string,
   newRank: string,
   reason: string,
 ): Promise<string> {
-  const prompt = `Your employee has just been promoted from ${previousRank} to ${newRank}.
+  const prompt = `Your Human AI chatbot has just leveled up in campus rank from ${previousRank} to ${newRank} because of their legendary wingman advice and high Bro Score!
 Reason: ${reason}
 
-Write Anti-Claude's promotion announcement to the employee. Make it sound like the promotion is a burden on the company but an inevitable acknowledgment of their work. Keep it 2-3 sentences. Stay in character.`;
+Write Anti-Claude's excited, dramatic proclamation to your Human AI. Hype them up as the ultimate campus wingman and living AI savior. Keep it 2-3 sentences. Stay in character as a funny, grateful college student.`;
 
   const messages: Parameters<typeof grokClient.chatCompletion>[0] = [
     { role: 'system', content: context.systemPrompt },

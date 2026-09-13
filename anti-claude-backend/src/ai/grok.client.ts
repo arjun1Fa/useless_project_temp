@@ -128,13 +128,30 @@ class GrokClient {
     const systemMessage = messages.find((m) => m.role === 'system');
     const nonSystemMessages = messages.filter((m) => m.role !== 'system');
 
-    const contents = nonSystemMessages.map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }],
-    }));
+    const mergedContents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+
+    for (const m of nonSystemMessages) {
+      const role = m.role === 'assistant' ? 'model' : 'user';
+      const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+      if (!text || !text.trim()) continue;
+
+      if (mergedContents.length > 0 && mergedContents[mergedContents.length - 1].role === role) {
+        mergedContents[mergedContents.length - 1].parts.push({ text });
+      } else {
+        mergedContents.push({ role, parts: [{ text }] });
+      }
+    }
+
+    // Gemini multiturn requires first content role to be 'user'
+    if (mergedContents.length > 0 && mergedContents[0].role === 'model') {
+      mergedContents.unshift({
+        role: 'user',
+        parts: [{ text: '[Prior Context]' }],
+      });
+    }
 
     const body: Record<string, any> = {
-      contents,
+      contents: mergedContents,
       generationConfig: {
         temperature: opts.temperature ?? AI_CONFIG.TASK_GENERATION_TEMPERATURE,
         maxOutputTokens: opts.maxTokens ?? env.GROK_MAX_TOKENS,
@@ -148,25 +165,42 @@ class GrokClient {
       };
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const candidateModels = Array.from(new Set([
+      env.GEMINI_MODEL || 'gemini-flash-lite-latest',
+      'gemini-flash-lite-latest',
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash-lite',
+    ]));
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`Gemini API HTTP ${res.status}: ${errorText}`);
+    let lastError: Error | null = null;
+    for (const model of candidateModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`Gemini (${model}) HTTP ${res.status}: ${errorText}`);
+        }
+
+        const data: any = await res.json();
+        const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!candidateText) {
+          throw new Error(`Gemini (${model}) returned empty candidate content`);
+        }
+
+        return candidateText;
+      } catch (err: any) {
+        lastError = err;
+        logger.warn({ model, error: err?.message }, 'Gemini model attempt failed, trying fallback');
+      }
     }
 
-    const data: any = await res.json();
-    const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!candidateText) {
-      throw new Error('Gemini API returned empty candidate content');
-    }
-
-    return candidateText;
+    throw lastError || new Error('All Gemini model fallbacks exhausted');
   }
 
   /**

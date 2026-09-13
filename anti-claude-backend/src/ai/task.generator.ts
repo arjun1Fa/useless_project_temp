@@ -23,12 +23,26 @@ const taskOutputSchema = z.object({
 
 export type GeneratedTask = z.infer<typeof taskOutputSchema>;
 
+export const SCENARIO_THEMES = [
+  'Academic Cram: Canvas portal locks in 8 minutes — urgent essay paragraphs or philosophical argument needed before zero grade',
+  'Crush Dilemma: Crush posted an Instagram story or sent a cryptic text ("k." or "👍") — craft a witty, high-rizz reply without looking down-bad',
+  'Roommate Warfare: Roommate committed dorm crimes (radioactive food in microwave, unwashed pans) — draft a passive-aggressive sticky note',
+  'Professor Negotiation: Slept through an 8 AM midterm or need a paper extension — write a medically tragic, blameless excuse email',
+  'Dorm Survival: 3 AM all-nighter culinary disaster or running on pure caffeine — need an emergency survival pep-talk',
+  'Group Project Betrayal: Slackers in the group project did zero work — write a savage yet professional message to the group chat',
+  'Campus Fashion & Fit Check: Need a photographic fit check or verification that an outfit does not look completely unhinged',
+  'Late-Night Coding Meltdown: Convinced a Python/C++ compiler error is personally haunting the dorm — need diagnostic advice',
+];
+
 export async function generateTask(
   context: AIContext,
-  opts: { isEmergency?: boolean; overrideAbsurdityLevel?: number } = {},
+  opts: { isEmergency?: boolean; overrideAbsurdityLevel?: number; scenarioTheme?: string } = {},
 ): Promise<GeneratedTask> {
   const absurdityLevel = opts.overrideAbsurdityLevel ?? context.employee.absurdityLevel;
   const isEmergency = opts.isEmergency ?? false;
+
+  // Pick a random creative scenario theme if not provided
+  const scenarioTheme = opts.scenarioTheme ?? SCENARIO_THEMES[Math.floor(Math.random() * SCENARIO_THEMES.length)];
 
   // Decide self-delegation
   const selfDelegationRoll = Math.random() < TASK_CONFIG.SELF_DELEGATION_PROBABILITY;
@@ -42,6 +56,7 @@ export async function generateTask(
     isEmergency,
     selfDelegationAllowed: selfDelegationRoll,
     memories: context.memories,
+    scenarioTheme,
   };
 
   const taskPrompt = buildTaskPrompt(promptInput);

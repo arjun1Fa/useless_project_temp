@@ -23,6 +23,8 @@ const absurditySchema = z.object({
 const triggerSchema = z.object({
   isEmergency: z.boolean().optional().default(false),
   overrideAbsurdityLevel: z.number().int().min(1).max(5).optional(),
+  priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'EMERGENCY']).optional(),
+  scenarioTheme: z.string().optional(),
 });
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -31,9 +33,14 @@ export async function adminRoutes(app: FastifyInstance) {
     schema: { tags: ['admin'], summary: 'Manually trigger a new task (same pipeline as scheduler)' },
   }, async (req, reply) => {
     const body = triggerSchema.parse(req.body ?? {});
+    const isEmergency = body.isEmergency || body.priority === 'EMERGENCY';
+    // If not specified, pick a random absurdity level between 1 and 5
+    const absurdity = body.overrideAbsurdityLevel ?? (Math.floor(Math.random() * 5) + 1);
+
     const result = await createTaskForEmployee(FIXED_USER_ID, {
-      isEmergency: body.isEmergency,
-      overrideAbsurdityLevel: body.overrideAbsurdityLevel,
+      isEmergency,
+      overrideAbsurdityLevel: absurdity,
+      scenarioTheme: body.scenarioTheme,
       manualTrigger: true,
     });
     return sendSuccess(reply, result, 201);

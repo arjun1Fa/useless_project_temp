@@ -66,7 +66,11 @@ export const api = {
     const res = await fetch(`${BACKEND_URL}/api/v1/admin/tasks/trigger`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ priority }),
+      body: JSON.stringify({
+        priority,
+        isEmergency: priority === 'EMERGENCY',
+        overrideAbsurdityLevel: Math.floor(Math.random() * 5) + 1,
+      }),
     });
     return res.json();
   },

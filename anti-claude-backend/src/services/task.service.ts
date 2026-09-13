@@ -26,6 +26,9 @@ export const taskService = {
   // ─── Mark task as seen ────────────────────────────────────────────────────
   async markSeen(taskId: string, userId: string) {
     const task = await this.getById(taskId, userId);
+    if (task.status === 'SEEN' || task.status === 'RESPONDED' || task.status === 'COMPLETED') {
+      return task;
+    }
     assertValidTransition(task.status, 'SEEN');
 
     const updated = await taskRepo.updateStatus(taskId, 'SEEN', { seenAt: new Date() });
@@ -84,6 +87,16 @@ export const taskService = {
     });
 
     realtimeGateway.broadcast(userId, 'TASK_RESPONDED', { taskId });
+
+    // Broadcast human message immediately to all connected screens
+    realtimeGateway.broadcast(userId, 'HUMAN_MESSAGE_CREATED', {
+      id: message.id,
+      taskId: task.id,
+      userId,
+      content: message.content,
+      senderType: 'HUMAN',
+      createdAt: message.createdAt,
+    });
 
     // ─── Fire-and-forget background evaluation ─────────────────────────────
     // Return immediately, evaluation runs async

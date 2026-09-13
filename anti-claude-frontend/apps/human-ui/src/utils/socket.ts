@@ -82,6 +82,15 @@ export const api = {
     return res.json();
   },
 
+  async sendMessage(content: string, taskId?: string, attachmentIds: string[] = []) {
+    const res = await fetch(`${BACKEND_URL}/api/v1/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, taskId, attachmentIds }),
+    });
+    return res.json();
+  },
+
   async toggleDnd(doNotDisturb: boolean) {
     const res = await fetch(`${BACKEND_URL}/api/v1/employee/settings`, {
       method: 'PATCH',
