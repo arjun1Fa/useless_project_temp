@@ -1,0 +1,451 @@
+// Anti-Claude — Complete Prisma Schema
+// All 13 domain entities with proper FKs, indexes, timestamps, and enums
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  DND
+  UNDER_REVIEW
+  PROMOTED
+  INACTIVE
+}
+
+enum Rank {
+  INTERN
+  JUNIOR_HUMAN
+  HUMAN_ASSOCIATE
+  SENIOR_HUMAN
+  HUMAN_SPECIALIST
+  HUMAN_OPERATIONS_MANAGER
+  DIRECTOR_OF_HUMAN_AFFAIRS
+  CHIEF_HUMAN_OFFICER
+  CEO
+}
+
+enum TaskCategory {
+  WRITING
+  IMAGE
+  FILE
+  DECISION
+  OPINION
+  CREATIVE
+  RELATIONSHIP
+  TRIVIAL
+  CORPORATE
+  ABSURD
+  EMERGENCY
+  SELF_DELEGATION
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum TaskStatus {
+  CREATED
+  DELIVERED
+  SEEN
+  RESPONDED
+  EVALUATING
+  COMPLETED
+  IGNORED
+  REJECTED
+  EXPIRED
+  CANCELLED
+  FAILED
+}
+
+enum ResponseType {
+  TEXT
+  IMAGE
+  FILE
+  TEXT_OR_IMAGE
+  TEXT_OR_FILE
+  TEXT_OR_IMAGE_OR_FILE
+}
+
+enum SenderType {
+  AI
+  HUMAN
+  SYSTEM
+}
+
+enum Verdict {
+  POOR
+  ACCEPTABLE
+  GOOD
+  EXCELLENT
+  PROMOTABLE
+}
+
+enum MemoryType {
+  PREFERENCE
+  BEHAVIOR
+  HISTORY
+  RELATIONSHIP
+  MILESTONE
+  FACT
+}
+
+enum ScheduledJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ScheduledJobType {
+  NEXT_TASK
+  INACTIVITY_CHECK
+  RELATIONSHIP_DECAY
+  CUSTOM
+}
+
+// ─── User (minimal, no passwords — no auth for hackathon) ──────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile       EmployeeProfile?
+  tasks         Task[]
+  messages      Message[]
+  notifications Notification[]
+  scheduledJobs ScheduledJob[]
+  events        Event[]
+
+  @@index([email])
+  @@map("users")
+}
+
+// ─── Employee Profile ─────────────────────────────────────────────────────────
+
+model EmployeeProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  displayName String
+  rank        Rank           @default(INTERN)
+  score       Int            @default(0)
+
+  // Task statistics
+  tasksCompleted      Int @default(0)
+  tasksIgnored        Int @default(0)
+  tasksRejected       Int @default(0)
+  tasksFailed         Int @default(0)
+  totalInteractions   Int @default(0)
+
+  // Performance scores (0-100)
+  averageResponseTime Int @default(0) // seconds
+  creativityScore     Int @default(50)
+  complianceScore     Int @default(50)
+  loyaltyScore        Int @default(50)
+  initiativeScore     Int @default(50)
+
+  // Absurdity level 1-5
+  absurdityLevel Int @default(1)
+
+  currentStatus EmployeeStatus @default(ACTIVE)
+
+  // Last task completed at (for inactivity check)
+  lastActiveAt DateTime @default(now())
+
+  // Last emergency task at (for cooldown)
+  lastEmergencyAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  settings         EmployeeSettings?
+  relationshipState RelationshipState?
+  promotions       Promotion[]
+  memories         Memory[]
+
+  @@index([userId])
+  @@map("employee_profiles")
+}
+
+// ─── Employee Settings ────────────────────────────────────────────────────────
+
+model EmployeeSettings {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  notificationsEnabled Boolean @default(true)
+  doNotDisturb         Boolean @default(false)
+  timezone             String  @default("UTC")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile EmployeeProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("employee_settings")
+}
+
+// ─── Task ─────────────────────────────────────────────────────────────────────
+
+model Task {
+  id     String @id @default(cuid())
+  userId String
+
+  title       String
+  description String
+  category    TaskCategory
+  priority    TaskPriority  @default(NORMAL)
+  status      TaskStatus    @default(CREATED)
+
+  absurdityLevel       Int         @default(1)
+  isEmergency          Boolean     @default(false)
+  expectedResponseType ResponseType @default(TEXT_OR_IMAGE)
+  evaluationCriteria   String[]    // e.g. ["creativity", "reasoning", "commitment"]
+  businessValue        String      @default("NEGLECTABLE")
+  deadlineSeconds      Int         @default(600)
+
+  // Timing (server-set, not client)
+  createdAt    DateTime  @default(now())
+  deliveredAt  DateTime?
+  seenAt       DateTime?
+  respondedAt  DateTime?
+  completedAt  DateTime?
+  expiresAt    DateTime?
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    Message[]
+  attachments Attachment[]
+  evaluation  Evaluation?
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("tasks")
+}
+
+// ─── Message ──────────────────────────────────────────────────────────────────
+
+model Message {
+  id     String @id @default(cuid())
+  userId String
+  taskId String?
+
+  senderType SenderType
+  content    String
+  metadata   Json?      // Optional: tone, category hints, personality mode
+
+  createdAt DateTime @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task        Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  attachments Attachment[]
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+// ─── Attachment ───────────────────────────────────────────────────────────────
+
+model Attachment {
+  id        String @id @default(cuid())
+  taskId    String?
+  messageId String?
+
+  filename   String
+  mimeType   String
+  size       Int    // bytes
+  storageKey String // S3 key or local file path
+
+  createdAt DateTime @default(now())
+
+  task    Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  message Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@index([messageId])
+  @@map("attachments")
+}
+
+// ─── Evaluation ───────────────────────────────────────────────────────────────
+
+model Evaluation {
+  id     String @id @default(cuid())
+  taskId String @unique
+
+  score      Int     // 0-100 overall
+  creativity Int     // 0-100
+  compliance Int     // 0-100
+  initiative Int     // 0-100
+  reasoning  Int     // 0-100
+  speed      Int     // 0-100
+  feedback   String
+  verdict    Verdict
+
+  // Extracted memories from this interaction (stored as raw strings before processing)
+  memoryCandidates String[]
+
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("evaluations")
+}
+
+// ─── Memory ───────────────────────────────────────────────────────────────────
+
+model Memory {
+  id     String @id @default(cuid())
+  userId String
+
+  // Linked to employee profile, not user directly
+  employeeId   String
+  content      String
+  type         MemoryType
+  importance   Int        // 1-10
+  sourceTaskId String?    // which task triggered this memory
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([employeeId])
+  @@index([importance])
+  @@map("memories")
+}
+
+// ─── Relationship State ───────────────────────────────────────────────────────
+
+model RelationshipState {
+  id         String @id @default(cuid())
+  employeeId String @unique
+
+  trust      Int @default(50) // 0-100
+  respect    Int @default(50)
+  annoyance  Int @default(10)
+  dependence Int @default(20)
+  familiarity Int @default(5)
+  suspicion  Int @default(5)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@map("relationship_states")
+}
+
+// ─── Promotion ────────────────────────────────────────────────────────────────
+
+model Promotion {
+  id         String @id @default(cuid())
+  employeeId String
+
+  previousRank Rank
+  newRank      Rank
+  reason       String
+  aiMessage    String? // Anti-Claude's reaction to the promotion
+
+  createdAt DateTime @default(now())
+
+  profile EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@map("promotions")
+}
+
+// ─── Event ────────────────────────────────────────────────────────────────────
+
+model Event {
+  id     String  @id @default(cuid())
+  userId String?
+
+  type       String // e.g. TASK_CREATED, EMPLOYEE_UPDATED
+  entityType String // e.g. task, employee
+  entityId   String
+  payload    Json
+
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([type])
+  @@map("events")
+}
+
+// ─── Notification ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+
+  type    String
+  title   String
+  message String
+  read    Boolean @default(false)
+  taskId  String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+  @@map("notifications")
+}
+
+// ─── Scheduled Job ────────────────────────────────────────────────────────────
+
+model ScheduledJob {
+  id     String @id @default(cuid())
+  userId String
+
+  type         ScheduledJobType
+  scheduledFor DateTime
+  status       ScheduledJobStatus @default(PENDING)
+  payload      Json
+
+  // Idempotency key — prevents duplicate jobs of the same type for user
+  idempotencyKey String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idempotencyKey])
+  @@index([scheduledFor])
+  @@index([status])
+  @@index([userId])
+  @@map("scheduled_jobs")
+}
