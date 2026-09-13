@@ -10,8 +10,7 @@
   "scripts": {
     "dev:student": "npm --workspace=apps/anti-claude-ui run dev",
     "dev:wingman": "npm --workspace=apps/human-ui run dev",
-    "dev:backend": "npm --workspace=apps/backend run dev",
-    "dev": "npm run dev:student & npm run dev:wingman",
+    "dev": "npx concurrently \"npm run dev:student\" \"npm run dev:wingman\"",
     "build": "npm --workspaces run build"
   },
   "keywords": [

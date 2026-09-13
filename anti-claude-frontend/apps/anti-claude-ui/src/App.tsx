@@ -1,351 +1,488 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  AlertTriangle,
   Flame,
-  Coffee,
-  Skull,
-  GraduationCap,
   Sparkles,
-  RefreshCw,
-  Clock,
-  Terminal,
+  Zap,
   ExternalLink,
+  Award,
+  RotateCcw,
+  Volume2,
+  VolumeX,
+  MessageSquare,
+  Clock,
+  User,
+  Bot,
+  CheckCircle,
+  Eye,
+  AlertCircle,
 } from 'lucide-react';
-import {
-  CrisisTask,
-  EvaluationOutput,
-  WingmanProfile,
-  INITIAL_WINGMAN_PROFILE,
-  PRECOMPILED_CRISES,
-  MOCK_EVALUATIONS,
-} from '@anti-claude/shared-types';
-import { PanicTerminal, TerminalLogEntry } from './components/PanicTerminal';
-import { AnxietyMeter } from './components/AnxietyMeter';
-import { CanvasPortal } from './components/CanvasPortal';
-import { CrushStatus } from './components/CrushStatus';
-import { WingmanSpy } from './components/WingmanSpy';
-import { MeltdownFeed } from './components/MeltdownFeed';
-import { AdminDemoBar } from './components/AdminDemoBar';
+import { WingmanProfile, INITIAL_WINGMAN_PROFILE } from '@anti-claude/shared-types';
+import { socket, broadcastSync, api } from './utils/socket';
 import { sfx } from './utils/audio';
 
+interface ConversationMessage {
+  id: string;
+  senderType: 'AI' | 'HUMAN';
+  content: string;
+  taskId?: string | null;
+  createdAt: string;
+  metadata?: Record<string, any> | null;
+}
+
 export const App: React.FC = () => {
-  // State management
-  const [activeCrisis, setActiveCrisis] = useState<CrisisTask>(PRECOMPILED_CRISES[0]);
+  // ─── State ───
+  const [activeTask, setActiveTask] = useState<any>(null);
   const [profile, setProfile] = useState<WingmanProfile>(INITIAL_WINGMAN_PROFILE);
-  const [evaluations, setEvaluations] = useState<EvaluationOutput[]>([]);
-  const [absurdityLevel, setAbsurdityLevel] = useState<number>(3);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-  const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [activeDraft, setActiveDraft] = useState<string>('');
-  const [hasAttachment, setHasAttachment] = useState<boolean>(false);
+  const [humanStatus, setHumanStatus] = useState<string>('IDLE');
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
-  // Terminal log entries
-  const [terminalLogs, setTerminalLogs] = useState<TerminalLogEntry[]>([
-    {
-      id: 'log-1',
-      timestamp: '11:40:12 PM',
-      source: 'SYSTEM',
-      text: 'Anti-Claude Dorm Cockpit v2.1.0 initialized on Port 3000.',
-      type: 'info',
-    },
-    {
-      id: 'log-2',
-      timestamp: '11:41:00 PM',
-      source: 'CANVAS',
-      text: 'Warning: Turnitin portal closing in 8 minutes for Pol Sci 201.',
-      type: 'urgent',
-    },
-    {
-      id: 'log-3',
-      timestamp: '11:41:45 PM',
-      source: 'STUDENT',
-      text: 'Bro I literally drank 4 Monsters and I can hear my heartbeat through my teeth.',
-      type: 'panic',
-    },
-    {
-      id: 'log-4',
-      timestamp: '11:42:00 PM',
-      source: 'GROK',
-      text: 'Synthesizing urgent philosophical essay crisis for human wingman...',
-      type: 'info',
-    },
-  ]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Real-time tab-to-tab sync via BroadcastChannel (synchronized with Port 3001)
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   useEffect(() => {
-    const channel = new BroadcastChannel('anti-claude-sync-channel');
+    scrollToBottom();
+  }, [messages]);
 
-    channel.onmessage = (event) => {
-      const { type, payload } = event.data;
-
-      if (type === 'WINGMAN_KEYSTROKE') {
-        setActiveDraft(payload.draftText);
-        setHasAttachment(!!payload.hasAttachment);
-        setProfile((prev) => ({ ...prev, currentStatus: 'COOKING_RESPONSE' }));
-      } else if (type === 'WINGMAN_TASK_SEEN') {
-        setProfile((prev) => ({ ...prev, currentStatus: 'VIEWING_TASK' }));
-        addLog('TELEMETRY', 'Human opened the task card! Start typing bro!', 'urgent');
-      } else if (type === 'WINGMAN_SUBMISSION') {
-        handleReceivedSubmission(payload.text, payload.attachment);
-      } else if (type === 'WINGMAN_DND_TOGGLED') {
-        if (payload.doNotDisturb) {
-          addLog('PANIC', 'HE TURNED ON DO NOT DISTURB?! DURING MIDTERM WEEK?! THE BETRAYAL!', 'panic');
-          sfx.playDiscordPing();
-        }
-      }
-    };
-
-    return () => {
-      channel.close();
-    };
-  }, [activeCrisis]);
-
-  // Sync state broadcast helper
-  const broadcastToWingman = (type: string, payload: unknown) => {
+  // ─── Initial Load from Backend ───
+  const loadData = async () => {
     try {
-      const channel = new BroadcastChannel('anti-claude-sync-channel');
-      channel.postMessage({ type, payload });
-      channel.close();
-    } catch {
-      // BroadcastChannel fallback
+      const [profRes, tasksRes, msgRes] = await Promise.all([
+        api.getProfile(),
+        api.getTasks(),
+        api.getMessages(),
+      ]);
+
+      if (profRes?.success && profRes.data) {
+        setProfile((prev) => ({
+          ...prev,
+          rank: profRes.data.rank || prev.rank,
+          score: profRes.data.score ?? prev.score,
+          tasksCompleted: profRes.data.tasksCompleted ?? prev.tasksCompleted,
+          trust: profRes.data.relationshipState?.trust ?? prev.trust,
+          annoyance: profRes.data.relationshipState?.annoyance ?? prev.annoyance,
+        }));
+      }
+
+      if (tasksRes?.success && tasksRes.data?.length > 0) {
+        setActiveTask(tasksRes.data[0]);
+      }
+
+      if (msgRes?.success && Array.isArray(msgRes.data)) {
+        // Chronological order (oldest to newest)
+        const sorted = [...msgRes.data].reverse().map((m: any) => {
+          let content = m.content;
+          if (typeof content === 'string' && content.trim().startsWith('{')) {
+            try {
+              const p = JSON.parse(content);
+              content = p.announcement || p.message || content;
+            } catch {}
+          }
+          return {
+            id: m.id,
+            senderType: m.senderType,
+            content,
+            taskId: m.taskId,
+            createdAt: m.createdAt,
+            metadata: m.metadata,
+          };
+        });
+        setMessages(sorted);
+      }
+    } catch (e) {
+      console.error('Failed to load initial data:', e);
     }
   };
 
-  const addLog = (
-    source: TerminalLogEntry['source'],
-    text: string,
-    type: TerminalLogEntry['type'] = 'info'
-  ) => {
-    const newLog: TerminalLogEntry = {
-      id: `log-${Date.now()}-${Math.random()}`,
-      timestamp: new Date().toLocaleTimeString(),
-      source,
-      text,
-      type,
-    };
-    setTerminalLogs((prev) => [...prev, newLog]);
-  };
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  // Trigger crises
-  const handleTriggerCanvasCrisis = () => {
-    const crisis = PRECOMPILED_CRISES[0];
-    setActiveCrisis(crisis);
-    sfx.playEmergencyKlaxon();
-    addLog('CANVAS', '11:59 PM CANVAS DEADLINE EMERGENCY TRIGGERED! CLOCK TICKING!', 'panic');
-    broadcastToWingman('NEW_CRISIS_DISPATCHED', crisis);
-  };
-
-  const handleTriggerCrushCrisis = () => {
-    const crisis = PRECOMPILED_CRISES[1];
-    setActiveCrisis(crisis);
-    sfx.playDiscordPing();
-    addLog('ROMANCE', 'Maya from Econ posted a BeReal! Need 4 non-creepy pickup lines immediately!', 'urgent');
-    broadcastToWingman('NEW_CRISIS_DISPATCHED', crisis);
-  };
-
-  const handleTriggerMicrowaveCrisis = () => {
-    const crisis = PRECOMPILED_CRISES[2];
-    setActiveCrisis(crisis);
-    sfx.playDiscordPing();
-    addLog('STUDENT', 'Kyle left his radioactive tuna casserole in the microwave again. Shakespearean curse note needed.', 'urgent');
-    broadcastToWingman('NEW_CRISIS_DISPATCHED', crisis);
-  };
-
-  const handleForcePromotion = () => {
-    sfx.playAirhorn();
-    setProfile((prev) => ({
-      ...prev,
-      rank: 'CERTIFIED_WINGMAN',
-      score: prev.score + 40,
-      gpa: Math.min(4.0, prev.gpa + 0.5),
-      trust: Math.min(100, prev.trust + 25),
-      annoyance: Math.max(0, prev.annoyance - 20),
-    }));
-    addLog('SYSTEM', '🎉 PROMOTION DECREE ISSUED: Human elevated to CERTIFIED WINGMAN! Perks: Netflix password access.', 'success');
-    broadcastToWingman('PROMOTION_GRANTED', {
-      rank: 'CERTIFIED_WINGMAN',
-      proclamation: 'You are officially promoted to Certified Wingman. Perks: Free access to my Netflix password and first dibs on dining hall cookies.',
-    });
-  };
-
-  const handleResetDemo = () => {
-    setProfile(INITIAL_WINGMAN_PROFILE);
-    setEvaluations([]);
-    setActiveDraft('');
-    setHasAttachment(false);
-    setActiveCrisis(PRECOMPILED_CRISES[0]);
-    addLog('SYSTEM', 'Demo state reset to initial 2.14 GPA Academic Probation baseline.', 'info');
-    broadcastToWingman('DEMO_RESET', INITIAL_WINGMAN_PROFILE);
-  };
-
-  // Evaluate human response
-  const handleReceivedSubmission = (text: string, attachment?: string) => {
-    setIsEvaluating(true);
-    addLog('GROK', `Ingesting human deliverable: "${text.slice(0, 45)}..."`, 'info');
-
-    setTimeout(() => {
-      // If response is witty/long -> S grade; if short/lazy -> F grade
-      const isGood = text.length > 50 || text.toLowerCase().includes('machiavelli') || text.toLowerCase().includes('rizz');
-      const evalResult: EvaluationOutput = isGood ? MOCK_EVALUATIONS.legendary : MOCK_EVALUATIONS.meltdown;
-
-      setEvaluations((prev) => [evalResult, ...prev]);
-      setIsEvaluating(false);
-
-      if (evalResult.passed) {
-        sfx.playAirhorn();
-        addLog('STUDENT', `PASSED: ${evalResult.feedbackMessage}`, 'success');
-        setProfile((prev) => ({
-          ...prev,
-          score: prev.score + evalResult.scoreDelta,
-          gpa: Math.min(4.0, prev.gpa + evalResult.gpaDelta),
-          tasksCompleted: prev.tasksCompleted + 1,
-          trust: Math.min(100, prev.trust + 15),
-          annoyance: Math.max(0, prev.annoyance - 15),
-          currentStatus: 'IDLE',
-        }));
-      } else {
-        sfx.playDiscordPing();
-        addLog('PANIC', `FAILED: ${evalResult.feedbackMessage}`, 'panic');
-        setProfile((prev) => ({
-          ...prev,
-          score: Math.max(0, prev.score + evalResult.scoreDelta),
-          gpa: Math.max(1.0, prev.gpa + evalResult.gpaDelta),
-          tasksFailed: prev.tasksFailed + 1,
-          annoyance: Math.min(100, prev.annoyance + 30),
-          trust: Math.max(0, prev.trust - 20),
-          currentStatus: 'IDLE',
-        }));
+  // ─── Realtime Socket.IO & Telemetry ───
+  useEffect(() => {
+    // 1. Phone-to-Phone live keystroke & viewing telemetry
+    const onSyncMessage = (data: { type: string; payload: any }) => {
+      const { type, payload } = data;
+      if (type === 'WINGMAN_KEYSTROKE') {
+        setActiveDraft(payload.draftText || '');
+        setHumanStatus(payload.draftText ? 'COOKING_RESPONSE' : 'READING_DIRECTIVE');
+      } else if (type === 'WINGMAN_TASK_SEEN') {
+        setHumanStatus('VIEWING_TASK');
+      } else if (type === 'WINGMAN_SUBMISSION') {
+        setHumanStatus('SUBMITTED_DELIVERABLE');
+        setActiveDraft('');
       }
+    };
+    socket.on('sync_message', onSyncMessage);
 
-      broadcastToWingman('EVALUATION_COMPLETED', evalResult);
-    }, 1200);
+    // 2. Real backend event listeners
+    const onTaskCreated = (event: any) => {
+      const t = event?.data;
+      if (t) {
+        setIsGenerating(false);
+        setActiveTask(t);
+        setHumanStatus('ASSIGNED_WAITING_FOR_HUMAN');
+        setActiveDraft('');
+        if (soundEnabled) sfx.playEmergencyKlaxon();
+        loadData();
+      }
+    };
+    socket.on('TASK_CREATED', onTaskCreated);
+
+    const onAiMessage = (event: any) => {
+      const m = event?.data;
+      if (m) {
+        let content = m.content;
+        if (typeof content === 'string' && content.trim().startsWith('{')) {
+          try {
+            const p = JSON.parse(content);
+            content = p.announcement || p.message || content;
+          } catch {}
+        }
+        const newMsg: ConversationMessage = {
+          id: m.id || `msg-${Date.now()}`,
+          senderType: m.senderType || 'AI',
+          content,
+          taskId: m.taskId,
+          createdAt: m.createdAt || new Date().toISOString(),
+          metadata: m.metadata,
+        };
+        setMessages((prev) => {
+          if (prev.some((item) => item.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
+        });
+      }
+    };
+    socket.on('AI_MESSAGE_CREATED', onAiMessage);
+    socket.on('AI_MESSAGE_SENT', onAiMessage);
+
+    const onTaskCompleted = (event: any) => {
+      setHumanStatus('EVALUATED');
+      if (soundEnabled) sfx.playAirhorn();
+      loadData();
+    };
+    socket.on('TASK_COMPLETED', onTaskCompleted);
+
+    const onPromoted = (event: any) => {
+      const p = event?.data;
+      if (p) {
+        setProfile((prev) => ({ ...prev, rank: p.newRank }));
+        if (soundEnabled) sfx.playAirhorn();
+        loadData();
+      }
+    };
+    socket.on('EMPLOYEE_PROMOTED', onPromoted);
+
+    return () => {
+      socket.off('sync_message', onSyncMessage);
+      socket.off('TASK_CREATED', onTaskCreated);
+      socket.off('AI_MESSAGE_CREATED', onAiMessage);
+      socket.off('AI_MESSAGE_SENT', onAiMessage);
+      socket.off('TASK_COMPLETED', onTaskCompleted);
+      socket.off('EMPLOYEE_PROMOTED', onPromoted);
+    };
+  }, [soundEnabled]);
+
+  // ─── THE SINGLE TRIGGER BUTTON ───
+  // Generates a live, dynamic, realistic, slightly absurd assignment using Gemini on backend
+  const handleTriggerRandomWork = async () => {
+    setIsGenerating(true);
+    if (soundEnabled) sfx.playDiscordPing();
+
+    try {
+      const res = await api.triggerTask('HIGH');
+      if (res?.success && res.data) {
+        setActiveTask(res.data);
+      }
+    } catch (e) {
+      console.error('Trigger task failed:', e);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleForcePromotion = async () => {
+    if (soundEnabled) sfx.playAirhorn();
+    try {
+      await api.promote();
+      loadData();
+    } catch {}
+  };
+
+  const handleResetDemo = async () => {
+    try {
+      await api.reset();
+      setActiveDraft('');
+      setActiveTask(null);
+      setHumanStatus('IDLE');
+      loadData();
+    } catch {}
+  };
+
+  const formatTime = (isoString: string) => {
+    try {
+      return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0d12] text-slate-100 flex flex-col pb-20 select-none">
-      {/* Top Navigation Bar */}
-      <header className="px-6 py-3 bg-[#11131a] border-b border-[#26293a] flex items-center justify-between shadow-xl">
+    <div className="min-h-screen bg-[#08090d] text-slate-100 flex flex-col font-mono select-none">
+      {/* ─── Top Control Header ─── */}
+      <header className="px-6 py-3.5 bg-[#0f1117] border-b border-[#202330] flex items-center justify-between shadow-xl shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-600/30">
-            <Flame className="w-5 h-5 text-white" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-600 to-[#ff5500] flex items-center justify-center shadow-lg shadow-rose-600/30 text-white font-black">
+            AC
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-black tracking-tight text-white font-mono">
-                ANTI-CLAUDE <span className="text-rose-500">//</span> DORM COCKPIT
+              <h1 className="text-sm font-black tracking-tight text-white">
+                ANTI-CLAUDE <span className="text-[#ff5500]">//</span> AI BOSS COCKPIT
               </h1>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-950 text-rose-300 border border-rose-800">
-                PORT 3000
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                AI EMPLOYER ACTIVE
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-mono">
-              The Panicked Student Demands, The Human Delivers
+            <p className="text-[11px] text-slate-400">
+              Autonomous Management Engine • Human Employee Connected
             </p>
           </div>
         </div>
 
-        {/* Live Status Indicators */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#161822] border border-[#26293a] text-xs font-mono">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-            <span className="text-slate-400">STATUS:</span>
-            <span className="text-emerald-400 font-bold">DOWN BAD & PROCRASTINATING</span>
-          </div>
+        {/* Status Indicators & Controls */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="p-1.5 rounded-lg bg-[#161822] text-slate-400 hover:text-white border border-[#26293a]"
+            title="Toggle Sound Effects"
+          >
+            {soundEnabled ? <Volume2 className="w-4 h-4 text-[#ff5500]" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+          </button>
 
           <a
             href="http://localhost:3001"
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-1.5 rounded-lg bg-[#1a1d2d] hover:bg-[#23273c] text-cyan-300 border border-cyan-800/40 text-xs font-mono flex items-center gap-1.5 transition"
+            className="px-3 py-1.5 rounded-lg bg-[#1a1d2d] hover:bg-[#23273c] text-cyan-300 border border-cyan-800/40 text-xs flex items-center gap-1.5 transition"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            Open Wingman Hotline (:3001)
+            Human Phone Screen (:3001)
           </a>
         </div>
       </header>
 
-      {/* Main Student Cockpit Grid */}
-      <main className="flex-1 p-6 grid grid-cols-12 gap-6 overflow-hidden">
-        {/* Left Column: Panic Terminal & Brain Stream (4 cols) */}
-        <section className="col-span-12 lg:col-span-4 flex flex-col space-y-4">
-          <AnxietyMeter anxietyLevel={profile.annoyance + 55} caffeineCans={4} heartRate={138} />
-          <div className="flex-1 min-h-[440px]">
-            <PanicTerminal logs={terminalLogs} isStreaming={isEvaluating} />
+      {/* ─── Main Cockpit Body ─── */}
+      <main className="flex-1 p-6 grid grid-cols-12 gap-6 max-w-7xl mx-auto w-full overflow-hidden">
+        {/* ─── LEFT PANEL: THE SINGLE TRIGGER BUTTON & DIRECTIVE STATUS (5 cols) ─── */}
+        <section className="col-span-12 lg:col-span-5 flex flex-col space-y-5">
+          {/* THE SINGLE TRIGGER BUTTON */}
+          <div className="p-6 bg-[#11131a] border-2 border-[#ff5500]/40 rounded-2xl shadow-[0_0_30px_rgba(255,85,0,0.15)] flex flex-col items-center text-center">
+            <span className="text-[11px] font-bold text-[#ff5500] uppercase tracking-widest mb-1 flex items-center gap-1.5">
+              <Zap className="w-4 h-4" /> Management Directive Generator
+            </span>
+            <h2 className="text-base font-black text-white mb-2">
+              Assign Work to Human Employee
+            </h2>
+            <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+              Click below to trigger Anti-Claude AI. It will generate a dynamic, witty, in-character corporate assignment and dispatch it to the human's phone immediately.
+            </p>
+
+            <button
+              onClick={handleTriggerRandomWork}
+              disabled={isGenerating}
+              className="w-full py-4 px-6 rounded-xl bg-gradient-to-r from-[#ff5500] via-orange-500 to-amber-500 hover:from-[#ff6611] hover:to-amber-400 text-black font-black text-sm uppercase tracking-wider shadow-[0_0_25px_rgba(255,85,0,0.4)] disabled:opacity-50 active:scale-[0.98] transition flex items-center justify-center gap-2"
+            >
+              {isGenerating ? (
+                <>
+                  <span className="w-4 h-4 rounded-full border-2 border-black border-t-transparent animate-spin"></span>
+                  <span>Anti-Claude is Formulating Directive...</span>
+                </>
+              ) : (
+                <>
+                  <Flame className="w-5 h-5 fill-current" />
+                  <span>⚡ Assign Random Work to Human</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* ACTIVE DIRECTIVE CARD */}
+          <div className="p-5 bg-[#12141c] border border-[#232738] rounded-2xl shadow-xl flex-1 flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-[#232738] mb-3">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-[#ff5500]" /> Active Task Dispatched
+              </span>
+              {activeTask && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ff5500]/20 text-[#ff5500] border border-[#ff5500]/30 uppercase">
+                  Tier {activeTask.absurdityLevel || 1}/5
+                </span>
+              )}
+            </div>
+
+            {activeTask ? (
+              <div className="space-y-3 flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-sm font-black text-white">{activeTask.title}</h3>
+                  <p className="mt-2 text-xs text-slate-300 bg-[#0c0d12] p-3 rounded-xl border border-[#202330] leading-relaxed">
+                    "{activeTask.aiMessage || activeTask.description}"
+                  </p>
+                </div>
+
+                {/* Human Live Status Indicator */}
+                <div className="p-3 rounded-xl bg-[#0e1017] border border-[#202330] space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Employee Telemetry:</span>
+                    <span className="font-bold text-[#ff5500] flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-[#ff5500] animate-ping"></span>
+                      {humanStatus}
+                    </span>
+                  </div>
+
+                  {/* Keystroke Mirror (Shows what human is typing in real time) */}
+                  {activeDraft ? (
+                    <div className="p-2.5 rounded-lg bg-black/60 border border-amber-500/30 text-xs text-amber-200">
+                      <span className="text-[10px] text-amber-500 block font-bold mb-0.5">
+                        HUMAN LIVE KEYSTROKE FEED:
+                      </span>
+                      "{activeDraft}"
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-500 italic">
+                      Awaiting human employee response on Phone 2...
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-slate-500 text-xs">
+                <AlertCircle className="w-8 h-8 mb-2 opacity-40" />
+                <span>No active task dispatched yet.</span>
+                <span className="mt-1 text-[11px]">Click the button above to assign work!</span>
+              </div>
+            )}
+          </div>
+
+          {/* Quick Boss Management Controls */}
+          <div className="p-4 bg-[#11131a] border border-[#202330] rounded-2xl flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-slate-400" />
+              <span>Rank: <strong className="text-amber-300">{profile.rank}</strong></span>
+              <span className="text-slate-500">•</span>
+              <span>Score: <strong className="text-white">{profile.score}</strong></span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleForcePromotion}
+                className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold transition flex items-center gap-1"
+                title="Force promote employee"
+              >
+                <Award className="w-3.5 h-3.5" />
+                Promote
+              </button>
+
+              <button
+                onClick={handleResetDemo}
+                className="p-1.5 rounded-lg bg-[#161822] hover:bg-[#202330] text-slate-400 hover:text-white border border-[#26293a] transition"
+                title="Reset Employee State"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </section>
 
-        {/* Center Column: Active Crisis & Canvas Clock (5 cols) */}
-        <section className="col-span-12 lg:col-span-5 flex flex-col space-y-4">
-          <CanvasPortal
-            assignmentTitle={activeCrisis.title}
-            dueSecondsRemaining={activeCrisis.timeLimitSeconds || 180}
-            submitted={evaluations.length > 0 && evaluations[0].passed}
-            grade={evaluations[0]?.grade}
-          />
-
-          {/* Active Crisis Overview Card */}
-          <div className="p-5 bg-[#161822] border border-[#26293a] rounded-xl relative overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-[#26293a]">
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4" /> Active College Crisis
-              </span>
-              <span className="text-xs font-mono px-2 py-0.5 rounded bg-rose-950/60 text-rose-300 border border-rose-800/60">
-                Absurdity Level {activeCrisis.absurdityLevel}/5
-              </span>
+        {/* ─── RIGHT PANEL: LIVE DIALOGUE & CONVERSATION STREAM (7 cols) ─── */}
+        <section className="col-span-12 lg:col-span-7 flex flex-col bg-[#0f1118] border border-[#202330] rounded-2xl shadow-xl overflow-hidden h-[740px]">
+          {/* Stream Header */}
+          <div className="px-5 py-3.5 bg-[#141620] border-b border-[#202330] flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-[#ff5500]" />
+              <h2 className="text-xs font-bold text-white uppercase tracking-wider">
+                Live Boss-Employee Dialogue Feed
+              </h2>
             </div>
-
-            <div className="mt-4">
-              <h3 className="text-base font-black text-slate-100 tracking-tight">
-                {activeCrisis.title}
-              </h3>
-              <p className="mt-2.5 text-sm text-slate-300 leading-relaxed font-mono bg-[#11131a] p-3.5 rounded-lg border border-[#26293a]">
-                "{activeCrisis.message}"
-              </p>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between text-xs font-mono text-slate-400">
-              <span>Category: <strong className="text-slate-200">{activeCrisis.category}</strong></span>
-              <span>Response: <strong className="text-cyan-300">{activeCrisis.expectedResponseType}</strong></span>
-            </div>
+            <span className="text-[11px] text-slate-400 font-mono">
+              {messages.length} Messages Recorded
+            </span>
           </div>
 
-          {/* Real-time Wingman Surveillance */}
-          <WingmanSpy
-            profile={profile}
-            activeResponseDraft={activeDraft}
-            hasAttachment={hasAttachment}
-          />
-        </section>
+          {/* Messages Scroll Area */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+            {messages.length === 0 && (
+              <div className="text-center py-20 text-slate-500">
+                No dialogue history recorded yet. Click "Assign Random Work" to start!
+              </div>
+            )}
 
-        {/* Right Column: Crush Status & Meltdown Feed (3 cols) */}
-        <section className="col-span-12 lg:col-span-3 flex flex-col space-y-4">
-          <CrushStatus />
-          <div className="flex-1 min-h-[380px]">
-            <MeltdownFeed
-              evaluations={evaluations}
-              onTriggerEvaluation={() => handleReceivedSubmission(activeDraft || 'Sample clutch response')}
-              isEvaluating={isEvaluating}
-            />
+            {messages.map((m) => {
+              const isAI = m.senderType === 'AI';
+              const isPromotion = m.metadata?.type === 'PROMOTION_ANNOUNCEMENT';
+              const isReaction = m.metadata?.type === 'EVALUATION_REACTION';
+
+              if (isPromotion) {
+                return (
+                  <div key={m.id} className="p-4 rounded-xl bg-gradient-to-r from-amber-950/40 via-yellow-950/30 to-amber-950/40 border border-amber-500/40 shadow-lg text-center my-2">
+                    <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest flex items-center justify-center gap-1">
+                      <Award className="w-3.5 h-3.5" /> OFFICIAL PROMOTION DECREE
+                    </span>
+                    <p className="text-xs text-slate-200 mt-1.5 leading-relaxed">{m.content}</p>
+                    <span className="text-[9px] text-slate-500 mt-1 block">{formatTime(m.createdAt)}</span>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={m.id} className={`flex flex-col ${isAI ? 'items-start' : 'items-end'}`}>
+                  {/* Sender Name */}
+                  <span className="text-[10px] text-slate-500 mb-1 px-1 flex items-center gap-1">
+                    {isAI ? (
+                      <>
+                        <Bot className="w-3 h-3 text-[#ff5500]" />
+                        <span className="text-[#ff5500] font-bold">Anti-Claude (Boss)</span>
+                      </>
+                    ) : (
+                      <>
+                        <User className="w-3 h-3 text-cyan-400" />
+                        <span className="text-cyan-400 font-bold">Human Employee</span>
+                      </>
+                    )}{' '}
+                    • {formatTime(m.createdAt)}
+                  </span>
+
+                  {/* Message Bubble */}
+                  <div
+                    className={`max-w-[85%] rounded-2xl p-3.5 leading-relaxed shadow-md ${
+                      isAI
+                        ? isReaction
+                          ? 'bg-[#151722] text-slate-100 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.1)]'
+                          : 'bg-[#181a24] text-slate-200 border border-[#282b3c]'
+                        : 'bg-gradient-to-tr from-[#ff5500] to-orange-500 text-black font-semibold rounded-br-none shadow-[0_0_15px_rgba(255,85,0,0.2)]'
+                    }`}
+                  >
+                    {isAI && isReaction && (
+                      <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b border-cyan-900/50 text-[10px] font-bold text-cyan-300 uppercase tracking-wider">
+                        <Sparkles className="w-3 h-3 text-cyan-400" />
+                        EVALUATION VERDICT: {m.metadata?.verdict || 'RECORDED'}
+                      </div>
+                    )}
+                    <p className="whitespace-pre-wrap">{m.content}</p>
+                  </div>
+                </div>
+              );
+            })}
+
+            <div ref={chatEndRef} />
           </div>
         </section>
       </main>
-
-      {/* Floating Admin Hackathon Demo Control Bar */}
-      <AdminDemoBar
-        onTriggerCanvasCrisis={handleTriggerCanvasCrisis}
-        onTriggerCrushCrisis={handleTriggerCrushCrisis}
-        onTriggerMicrowaveCrisis={handleTriggerMicrowaveCrisis}
-        onForcePromotion={handleForcePromotion}
-        onResetDemo={handleResetDemo}
-        absurdityLevel={absurdityLevel}
-        onSetAbsurdity={setAbsurdityLevel}
-        soundEnabled={soundEnabled}
-        onToggleSound={() => {
-          const next = !soundEnabled;
-          setSoundEnabled(next);
-          sfx.enabled = next;
-        }}
-      />
     </div>
   );
 };

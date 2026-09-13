@@ -9,12 +9,15 @@ import {
 } from '@anti-claude/shared-types';
 import { VoiceActuatorHome } from './views/VoiceActuatorHome';
 import { ActuatorDashboard } from './views/ActuatorDashboard';
+import { HumanChatView } from './views/HumanChatView';
 import { EmergencyHUD } from './components/EmergencyHUD';
 import { PromotionModal } from './components/PromotionModal';
 import { humanSfx } from './utils/audio';
 
+import { socket, broadcastSync, api } from './utils/socket';
+
 export const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'home' | 'dashboard'>('home');
+  const [currentView, setCurrentView] = useState<'chat' | 'home' | 'dashboard'>('chat');
   const [activeCrisis, setActiveCrisis] = useState<CrisisTask>(PRECOMPILED_CRISES[0]);
   const [profile, setProfile] = useState<WingmanProfile>(INITIAL_WINGMAN_PROFILE);
   const [evaluations, setEvaluations] = useState<EvaluationOutput[]>([]);
@@ -25,13 +28,42 @@ export const App: React.FC = () => {
   const [promotedRank, setPromotedRank] = useState<WingmanProfile['rank']>('CERTIFIED_WINGMAN');
   const [proclamationText, setProclamationText] = useState('');
 
-  // Sync with Port 3000 (Anti-Claude UI) via BroadcastChannel
+  // Initial load from backend API
   useEffect(() => {
-    const channel = new BroadcastChannel('anti-claude-sync-channel');
+    api.getProfile().then((res) => {
+      if (res?.success && res.data) {
+        setProfile((prev) => ({
+          ...prev,
+          rank: (res.data.rank as any) || prev.rank,
+          score: res.data.score ?? prev.score,
+          tasksCompleted: res.data.tasksCompleted ?? prev.tasksCompleted,
+          tasksFailed: res.data.tasksFailed ?? prev.tasksFailed,
+          trust: res.data.relationshipState?.trust ?? prev.trust,
+          annoyance: res.data.relationshipState?.annoyance ?? prev.annoyance,
+        }));
+      }
+    }).catch(() => {});
 
-    channel.onmessage = (event) => {
-      const { type, payload } = event.data;
+    api.getTasks().then((res) => {
+      if (res?.success && res.data && res.data.length > 0) {
+        const latest = res.data[0];
+        if (latest.status === 'DELIVERED' || latest.status === 'PENDING') {
+          setActiveCrisis((prev) => ({
+            ...prev,
+            id: latest.id,
+            title: latest.title,
+            message: latest.messages?.[0]?.content || latest.description,
+            absurdityLevel: latest.absurdityLevel,
+            isEmergency: latest.isEmergency,
+          }));
+        }
+      }
+    }).catch(() => {});
+  }, []);
 
+  // Sync with Anti-Claude UI via BroadcastChannel (same device) and Socket.IO (across phones)
+  useEffect(() => {
+    const handleIncomingSync = (type: string, payload: any) => {
       if (type === 'NEW_CRISIS_DISPATCHED') {
         setActiveCrisis(payload);
         if (payload.isEmergency) {
@@ -82,31 +114,91 @@ export const App: React.FC = () => {
       }
     };
 
+    // 1. BroadcastChannel (for same browser)
+    const channel = new BroadcastChannel('anti-claude-sync-channel');
+    channel.onmessage = (event) => {
+      const { type, payload } = event.data;
+      handleIncomingSync(type, payload);
+    };
+
+    // 2. Socket.IO relay (across phones)
+    const onSocketSync = (data: { type: string; payload: any }) => {
+      handleIncomingSync(data.type, data.payload);
+    };
+    socket.on('sync_message', onSocketSync);
+
+    // 3. Backend live event listeners
+    const onBackendTask = (event: any) => {
+      const t = event?.data;
+      if (t) {
+        setActiveCrisis((prev) => ({
+          ...prev,
+          id: t.id || t.taskId || prev.id,
+          title: t.title || prev.title,
+          message: t.aiMessage || t.description || prev.message,
+          isEmergency: !!t.isEmergency,
+        }));
+        if (t.isEmergency) {
+          humanSfx.playKlaxon();
+        } else {
+          humanSfx.playIncomingPing();
+        }
+      }
+    };
+    socket.on('TASK_CREATED', onBackendTask);
+
+    const onBackendEvaluation = (event: any) => {
+      const d = event?.data;
+      if (d) {
+        setIsSubmitting(false);
+        humanSfx.playPromotionAirhorn();
+        setProfile((prev) => ({
+          ...prev,
+          score: prev.score + (d.score || 10),
+          tasksCompleted: prev.tasksCompleted + 1,
+        }));
+      }
+    };
+    socket.on('TASK_COMPLETED', onBackendEvaluation);
+
+    const onBackendPromotion = (event: any) => {
+      const p = event?.data;
+      if (p) {
+        setPromotedRank(p.newRank);
+        setProclamationText(p.aiMessage || 'You have been promoted by Management.');
+        setPromotionModalOpen(true);
+        humanSfx.playPromotionAirhorn();
+      }
+    };
+    socket.on('EMPLOYEE_PROMOTED', onBackendPromotion);
+
     // Notify Anti-Claude that the human opened the hotline
-    channel.postMessage({ type: 'WINGMAN_TASK_SEEN', payload: { taskId: activeCrisis.id } });
+    broadcastSync('WINGMAN_TASK_SEEN', { taskId: activeCrisis.id });
+    api.markSeen(activeCrisis.id);
 
     return () => {
       channel.close();
+      socket.off('sync_message', onSocketSync);
+      socket.off('TASK_CREATED', onBackendTask);
+      socket.off('TASK_COMPLETED', onBackendEvaluation);
+      socket.off('EMPLOYEE_PROMOTED', onBackendPromotion);
     };
   }, [activeCrisis.id]);
 
-  const broadcastToStudent = (type: string, payload: unknown) => {
-    try {
-      const channel = new BroadcastChannel('anti-claude-sync-channel');
-      channel.postMessage({ type, payload });
-      channel.close();
-    } catch {
-      // Fallback
-    }
-  };
-
   const handleDraftChange = (draftText: string, hasAttachment: boolean) => {
-    broadcastToStudent('WINGMAN_KEYSTROKE', { draftText, hasAttachment });
+    broadcastSync('WINGMAN_KEYSTROKE', { draftText, hasAttachment });
   };
 
-  const handleSubmitResponse = (text: string, attachment?: string) => {
+  const handleSubmitResponse = async (text: string, attachment?: string) => {
     setIsSubmitting(true);
-    broadcastToStudent('WINGMAN_SUBMISSION', { text, attachment });
+    // 1. Broadcast to student UI
+    broadcastSync('WINGMAN_SUBMISSION', { text, attachment });
+    // 2. Submit to backend API
+    try {
+      await api.respond(activeCrisis.id, text);
+    } catch {
+      // Backend respond fallback
+    }
   };
 
   return (
@@ -122,8 +214,19 @@ export const App: React.FC = () => {
         proclamationText={proclamationText}
       />
 
-      {/* Active View: Home Voice Actuator OR Minimal Dashboard */}
-      {currentView === 'home' ? (
+      {/* Active View: Realtime Chat, Home Voice Actuator OR Minimal Dashboard */}
+      {currentView === 'chat' && (
+        <HumanChatView
+          activeCrisis={activeCrisis}
+          profile={profile}
+          onNavigateToDashboard={() => setCurrentView('dashboard')}
+          onDraftChange={handleDraftChange}
+          onSubmitResponse={handleSubmitResponse}
+          isSubmitting={isSubmitting}
+        />
+      )}
+
+      {currentView === 'home' && (
         <VoiceActuatorHome
           activeCrisis={activeCrisis}
           onSubmitResponse={handleSubmitResponse}
@@ -131,15 +234,17 @@ export const App: React.FC = () => {
           onDraftChange={handleDraftChange}
           isSubmitting={isSubmitting}
         />
-      ) : (
+      )}
+
+      {currentView === 'dashboard' && (
         <ActuatorDashboard
           profile={profile}
           activeCrisis={activeCrisis}
           evaluations={evaluations}
-          onNavigateToHome={() => setCurrentView('home')}
+          onNavigateToHome={() => setCurrentView('chat')}
           onExecuteDirective={(crisis) => {
             setActiveCrisis(crisis);
-            setCurrentView('home');
+            setCurrentView('chat');
           }}
         />
       )}

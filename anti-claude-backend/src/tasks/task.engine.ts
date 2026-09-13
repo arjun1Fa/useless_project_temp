@@ -166,6 +166,15 @@ export async function createTaskForEmployee(
     aiMessage: generated.aiMessage,
   });
 
+  realtimeGateway.broadcast(userId, 'AI_MESSAGE_CREATED', {
+    id: result.message.id,
+    taskId: result.task.id,
+    userId,
+    content: result.message.content,
+    senderType: 'AI',
+    createdAt: result.message.createdAt,
+  });
+
   realtimeGateway.broadcast(userId, 'NOTIFICATION_CREATED', {
     notificationId: result.notification.id,
     title: result.notification.title,

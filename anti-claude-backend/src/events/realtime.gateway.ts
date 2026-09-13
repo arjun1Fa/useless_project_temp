@@ -34,6 +34,12 @@ class RealtimeGateway {
         }
       });
 
+      // Relay client-to-client telemetry between Phone 1 and Phone 2
+      socket.on('relay', (data: { userId?: string; type: string; payload: unknown }) => {
+        const room = `user:${data?.userId || 'user_fixed_001'}`;
+        socket.to(room).emit('sync_message', { type: data.type, payload: data.payload });
+      });
+
       socket.on('disconnect', (reason) => {
         logger.info({ socketId: socket.id, reason }, 'Socket disconnected');
       });
