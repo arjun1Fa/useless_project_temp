@@ -13,7 +13,7 @@ class RealtimeGateway {
   initialize(httpServer: HttpServer): SocketIOServer {
     this.io = new SocketIOServer(httpServer, {
       cors: {
-        origin: env.CORS_ORIGINS,
+        origin: env.IS_DEVELOPMENT ? true : env.CORS_ORIGINS,
         methods: ['GET', 'POST'],
         credentials: true,
       },
